@@ -199,7 +199,7 @@ MIT License - Feel free to use and modify for your projects.
 
 ## Author
 
-Created as part of Assignment 02 - Solidity DApp Development
+Eman Faris 
 
 ## Support
 
@@ -207,4 +207,5 @@ For issues or questions:
 - Check the [Ethereum documentation](https://ethereum.org/en/developers/)
 - Visit [MetaMask documentation](https://docs.metamask.io/)
 - Use Remix IDE for contract debugging
+
 
