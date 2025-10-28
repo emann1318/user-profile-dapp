@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Profile DApp</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <img src="https://img.icons8.com/fluency/96/000000/ethereum.png" alt="Ethereum Logo" style="width: 60px; height: 60px; margin-bottom: 10px;">
+        <h1>User Profile DApp</h1>
+        <p class="subtitle">Decentralized User Profile Management System</p>
+    </header>
+
+    <!-- Main content -->
+    <main>
+        <!-- Connection Section -->
+        <section class="section connection-section">
+            <h2>Wallet Connection</h2>
+            <p>Connect your MetaMask wallet to interact with the smart contract.</p>
+            <button id="connectButton" class="btn btn-primary">Connect MetaMask</button>
+            <p id="connectionStatus" class="status">Not connected</p>
+            <ul id="accountInfo" class="info-list"></ul>
+        </section>
+
+        <!-- Contract Information Section -->
+        <section class="section">
+            <h2>Contract Information</h2>
+            <p>Enter your deployed contract address to interact with it:</p>
+            <input type="text" id="contractAddress" placeholder="0x..." class="input">
+            <button id="loadContractButton" class="btn btn-secondary">Load Contract</button>
+            <div id="contractStatus" class="status"></div>
+            
+            <div class="links">
+                <a href="https://sepolia.etherscan.io/" target="_blank">View on Etherscan</a> | 
+                <a href="https://remix.ethereum.org/" target="_blank">Open Remix IDE</a>
+            </div>
+        </section>
+
+        <!-- User Profile Section -->
+        <section class="section">
+            <h2>User Profile Management</h2>
+            <div class="form-group">
+                <h3>Set Your Profile</h3>
+                <input type="text" id="userName" placeholder="Enter your name" class="input">
+                <input type="number" id="userAge" placeholder="Enter your age" class="input">
+                <button id="setProfileButton" class="btn btn-primary">Set Profile</button>
+            </div>
+            
+            <div class="form-group">
+                <h3>Get User Profile</h3>
+                <input type="text" id="getProfileAddress" placeholder="Enter address (optional)" class="input">
+                <button id="getProfileButton" class="btn btn-secondary">Get Profile</button>
+                <div id="profileResult" class="result"></div>
+            </div>
+        </section>
+
+        <!-- Balance Management Section -->
+        <section class="section">
+            <h2>Balance Management</h2>
+            <div class="form-group">
+                <h3>Deposit Balance</h3>
+                <input type="text" id="depositAmount" placeholder="Amount in ETH" class="input">
+                <button id="depositButton" class="btn btn-primary">Deposit</button>
+            </div>
+            
+            <div class="form-group">
+                <h3>Get Balance</h3>
+                <input type="text" id="getBalanceAddress" placeholder="Enter address (optional)" class="input">
+                <button id="getBalanceButton" class="btn btn-secondary">Get Balance</button>
+                <div id="balanceResult" class="result"></div>
+            </div>
+            
+            <div class="form-group">
+                <h3>Withdraw Balance</h3>
+                <input type="text" id="withdrawAmount" placeholder="Amount to withdraw" class="input">
+                <button id="withdrawButton" class="btn btn-danger">Withdraw</button>
+            </div>
+        </section>
+
+        <!-- Transaction History Section -->
+        <section class="section">
+            <h2>Recent Transactions</h2>
+            <ul id="transactionHistory" class="transaction-list">
+                <li>No transactions yet</li>
+            </ul>
+        </section>
+
+        <!-- Footer -->
+        <footer>
+            <p>&copy; 2024 User Profile DApp. Built with Solidity and Ethers.js</p>
+        </footer>
+    </main>
+
+    <script>
+        // Contract ABI
+        const contractABI = [
+            "function setUserProfile(string memory _name, uint256 _age) public",
+            "function getUserProfile(address _user) public view returns (string memory, uint256)",
+            "function depositBalance() public payable",
+            "function getBalance(address _user) public view returns (uint256)",
+            "function withdrawBalance(uint256 _amount) public",
+            "function getOwner() public view returns (address)",
+            "function owner() public view returns (address)",
+            "function names(address) public view returns (string memory)",
+            "function ages(address) public view returns (uint256)",
+            "function balances(address) public view returns (uint256)"
+        ];
+
+        let provider, signer, contract, userAddress;
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            checkMetaMask();
+            attachEventListeners();
+        });
+
+        function checkMetaMask() {
+            if (typeof window.ethereum === 'undefined') {
+                alert('Please install MetaMask!');
+            }
+        }
+
+        function attachEventListeners() {
+            document.getElementById('connectButton').addEventListener('click', connectWallet);
+            document.getElementById('loadContractButton').addEventListener('click', loadContract);
+            document.getElementById('setProfileButton').addEventListener('click', setProfile);
+            document.getElementById('getProfileButton').addEventListener('click', getProfile);
+            document.getElementById('depositButton').addEventListener('click', depositBalance);
+            document.getElementById('getBalanceButton').addEventListener('click', getBalance);
+            document.getElementById('withdrawButton').addEventListener('click', withdrawBalance);
+        }
+
+        async function connectWallet() {
+            // Check if MetaMask is installed
+            if (typeof window.ethereum === 'undefined') {
+                alert('MetaMask is not installed! Please install MetaMask from https://metamask.io/');
+                return;
+            }
+
+            try {
+                console.log('Attempting to connect to MetaMask...');
+                
+                // Request account access
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                console.log('MetaMask connection approved');
+                
+                // Create provider
+                provider = new ethers.providers.Web3Provider(window.ethereum);
+                console.log('Provider created');
+                
+                // Get signer and address
+                signer = provider.getSigner();
+                userAddress = await signer.getAddress();
+                
+                // Update UI
+                document.getElementById('connectionStatus').textContent = 'Connected';
+                document.getElementById('connectionStatus').className = 'status success';
+                document.getElementById('accountInfo').innerHTML = `<li>Address: ${userAddress}</li>`;
+                
+                console.log('Successfully connected to:', userAddress);
+                
+                // Show network information
+                const network = await provider.getNetwork();
+                console.log('Connected to network:', network.name, '(Chain ID:', network.chainId, ')');
+                
+            } catch (error) {
+                console.error('Error connecting wallet:', error);
+                
+                let errorMessage = 'Failed to connect wallet. ';
+                
+                if (error.code === 4001) {
+                    errorMessage += 'Please approve the connection in MetaMask.';
+                } else if (error.code === -32002) {
+                    errorMessage += 'Already processing, please check MetaMask.';
+                } else if (error.message) {
+                    errorMessage += error.message;
+                } else {
+                    errorMessage += 'Please try again.';
+                }
+                
+                alert(errorMessage);
+            }
+        }
+
+        async function loadContract() {
+            const contractAddress = document.getElementById('contractAddress').value;
+            if (!contractAddress) {
+                alert('Please enter a contract address');
+                return;
+            }
+
+            if (!provider) {
+                alert('Please connect your wallet first');
+                return;
+            }
+
+            try {
+                contract = new ethers.Contract(contractAddress, contractABI, signer);
+                document.getElementById('contractStatus').textContent = 'Contract loaded successfully';
+                document.getElementById('contractStatus').className = 'status success';
+                console.log('Contract loaded:', contractAddress);
+            } catch (error) {
+                console.error('Error loading contract:', error);
+                alert('Failed to load contract. Please check the address.');
+            }
+        }
+
+        async function setProfile() {
+            if (!contract) {
+                alert('Please load the contract first');
+                return;
+            }
+
+            const name = document.getElementById('userName').value;
+            const age = parseInt(document.getElementById('userAge').value);
+
+            if (!name || !age) {
+                alert('Please enter both name and age');
+                return;
+            }
+
+            try {
+                const tx = await contract.setUserProfile(name, age);
+                addTransaction('Set Profile', tx.hash);
+                await tx.wait();
+                alert('Profile updated successfully!');
+                console.log('Transaction confirmed:', tx.hash);
+            } catch (error) {
+                console.error('Error setting profile:', error);
+                alert('Transaction failed. Please try again.');
+            }
+        }
+
+        async function getProfile() {
+            if (!contract || !provider) {
+                alert('Please load the contract and connect wallet first');
+                return;
+            }
+
+            const address = document.getElementById('getProfileAddress').value || userAddress;
+
+            try {
+                const [name, age] = await contract.getUserProfile(address);
+                document.getElementById('profileResult').innerHTML = `
+                    <strong>Name:</strong> ${name || 'Not set'}<br>
+                    <strong>Age:</strong> ${age.toString()}
+                `;
+            } catch (error) {
+                console.error('Error getting profile:', error);
+                document.getElementById('profileResult').innerHTML = 'Failed to get profile';
+            }
+        }
+
+        async function depositBalance() {
+            if (!contract) {
+                alert('Please load the contract first');
+                return;
+            }
+
+            const amount = document.getElementById('depositAmount').value;
+            if (!amount) {
+                alert('Please enter an amount');
+                return;
+            }
+
+            try {
+                const tx = await contract.depositBalance({
+                    value: ethers.utils.parseEther(amount)
+                });
+                addTransaction('Deposit Balance', tx.hash);
+                await tx.wait();
+                alert('Balance deposited successfully!');
+                console.log('Transaction confirmed:', tx.hash);
+            } catch (error) {
+                console.error('Error depositing:', error);
+                alert('Transaction failed. Please try again.');
+            }
+        }
+
+        async function getBalance() {
+            if (!contract || !provider) {
+                alert('Please load the contract and connect wallet first');
+                return;
+            }
+
+            const address = document.getElementById('getBalanceAddress').value || userAddress;
+
+            try {
+                const balance = await contract.getBalance(address);
+                const balanceInEth = ethers.utils.formatEther(balance);
+                document.getElementById('balanceResult').innerHTML = `
+                    <strong>Balance:</strong> ${balanceInEth} ETH
+                `;
+            } catch (error) {
+                console.error('Error getting balance:', error);
+                document.getElementById('balanceResult').innerHTML = 'Failed to get balance';
+            }
+        }
+
+        async function withdrawBalance() {
+            if (!contract) {
+                alert('Please load the contract first');
+                return;
+            }
+
+            const amount = document.getElementById('withdrawAmount').value;
+            if (!amount) {
+                alert('Please enter an amount');
+                return;
+            }
+
+            try {
+                const tx = await contract.withdrawBalance(ethers.utils.parseEther(amount));
+                addTransaction('Withdraw Balance', tx.hash);
+                await tx.wait();
+                alert('Balance withdrawn successfully!');
+                console.log('Transaction confirmed:', tx.hash);
+            } catch (error) {
+                console.error('Error withdrawing:', error);
+                alert('Transaction failed. Please try again.');
+            }
+        }
+
+        function addTransaction(type, hash) {
+            const history = document.getElementById('transactionHistory');
+            if (history.children.length === 1 && history.children[0].textContent === 'No transactions yet') {
+                history.innerHTML = '';
+            }
+            
+            const link = `https://sepolia.etherscan.io/tx/${hash}`;
+            const listItem = document.createElement('li');
+            listItem.innerHTML = `
+                <strong>${type}:</strong> <a href="${link}" target="_blank">${hash.substring(0, 10)}...</a>
+                <span class="time">${new Date().toLocaleTimeString()}</span>
+            `;
+            history.insertBefore(listItem, history.firstChild);
+        }
+    </script>
+</body>
+</html>
+
